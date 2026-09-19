@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # --- BANCO DO CLIENT-SERVICE ---
+  db-client:
+    image: postgres:16
+    container_name: pg-client
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ***REMOVED***
+      POSTGRES_DB: client_db
+    ports:
+      - "5432:5432" # Acessível na sua máquina via localhost:5432
+
+  # --- BANCO DO ORDER-SERVICE ---
+  db-order:
+    image: postgres:16
+    container_name: pg-order
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ***REMOVED***
+      POSTGRES_DB: order_db
+    ports:
+      - "5433:5432" # Acessível na sua máquina via localhost:5433 (Evita conflito)
+
+  # --- BANCO DO STOCK-SERVICE ---
+  db-stock:
+    image: postgres:16
+    container_name: pg-stock
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ***REMOVED***
+      POSTGRES_DB: stock_db
+    ports:
+      - "5434:5432" # Acessível na sua máquina via localhost:5434 (Evita conflito)
