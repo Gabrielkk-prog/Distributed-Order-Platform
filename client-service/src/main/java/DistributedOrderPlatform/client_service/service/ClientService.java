@@ -1,9 +1,10 @@
 package DistributedOrderPlatform.client_service.service;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import DistributedOrderPlatform.client_service.entity.Client;
-
+import DistributedOrderPlatform.client_service.exception.ResourceNotFoundException;
 import DistributedOrderPlatform.client_service.repository.client_repository;
 import DistributedOrderPlatform.client_service.dto.ClientRequest;
 import DistributedOrderPlatform.client_service.dto.ClientResponse;
@@ -18,6 +19,19 @@ public class ClientService {
     // Construtor corrigido para injeção de dependência
     public ClientService(client_repository repository) {
         this.repository = repository;
+    }
+
+    public ClientResponse findById(UUID id) {
+
+        Client client = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Client not found"));
+
+        return new ClientResponse(
+                client.getId(),
+                client.getName(),
+                client.getEmail(),
+                client.getCreatedAt());
     }
 
     public ClientResponse create(ClientRequest request) {
