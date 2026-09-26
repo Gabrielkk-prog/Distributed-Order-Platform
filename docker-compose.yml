@@ -6,11 +6,13 @@ services:
     image: postgres:16
     container_name: pg-client
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER: 
       POSTGRES_PASSWORD: ***REMOVED***
       POSTGRES_DB: client_db
     ports:
-      - "5432:5432" # Acessível na sua máquina via localhost:5432
+      - "5439:5432" # Acessível na sua máquina via localhost:5432
+    volumes:
+      - ./v_client_db:/var/lib/postgresql/data # <- ADICIONE ESTA LINHA EXATAMENTE AQUI
 
   # --- BANCO DO ORDER-SERVICE ---
   db-order:
@@ -21,7 +23,9 @@ services:
       POSTGRES_PASSWORD: ***REMOVED***
       POSTGRES_DB: order_db
     ports:
-      - "5433:5432" # Acessível na sua máquina via localhost:5433 (Evita conflito)
+      - "5442:5432" # Porta externa exclusiva 5442
+    volumes:
+      - ./v_order_db:/var/lib/postgresql/data # Pasta física exclusiva
 
   # --- BANCO DO STOCK-SERVICE ---
   db-stock:
@@ -32,4 +36,6 @@ services:
       POSTGRES_PASSWORD: ***REMOVED***
       POSTGRES_DB: stock_db
     ports:
-      - "5434:5432" # Acessível na sua máquina via localhost:5434 (Evita conflito)
+      - "5443:5432" # Porta externa exclusiva 5443
+    volumes:
+      - ./v_stock_db:/var/lib/postgresql/data # Pasta física exclusiva
