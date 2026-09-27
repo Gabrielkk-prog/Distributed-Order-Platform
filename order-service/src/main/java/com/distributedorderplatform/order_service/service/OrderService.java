@@ -17,17 +17,25 @@ import com.distributedorderplatform.order_service.repository.OrderItemRepository
 import com.distributedorderplatform.order_service.repository.OrderRepository;
 
 import jakarta.transaction.Transactional;
+// ... seus outros imports ...
+import org.springframework.kafka.core.KafkaTemplate;
 
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    // 1. Adicione o template do Kafka (Chave String, Valor pode ser o seu DTO de
+    // Resposta)
+    private final KafkaTemplate<String, OrderResponse> kafkaTemplate;
 
-    // Construtor para injeção de dependência dos dois repositórios
-    public OrderService(OrderRepository orderRepository, OrderItemRepository orderItemRepository) {
+    // 2. Atualize o construtor para receber a nova dependência
+    public OrderService(OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            KafkaTemplate<String, OrderResponse> kafkaTemplate) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
@@ -46,45 +54,27 @@ public class OrderService {
                 .stream()
                 .map(item -> {
                     OrderItem orderItem = new OrderItem();
-
-                    // CORREÇÃO DOS MÉTODOS (Preste atenção nas letras MAIÚSCULAS do meio)
                     orderItem.setOrderId(savedOrder.getId());
-                    orderItem.setProductId(item.productId()); // 'I' maiúsculo
+                    orderItem.setProductId(item.productId());
                     orderItem.setQuantity(item.quantity());
-                    orderItem.setUnitPrice(item.unitPrice()); // 'P' maiúsculo
+                    orderItem.setUnitPrice(item.unitPrice());
 
                     return orderItem;
                 })
                 .toList();
 
+        // 1. Grava todos os itens no banco de dados Postgres
         orderItemRepository.saveAll(orderItems);
 
-        return toResponse(savedOrder, orderItems);
-    }
+        // 2. Transforma os dados gravados no objeto de resposta (OrderResponse)
+        OrderResponse response = toResponse(savedOrder, orderItems);
 
-    private BigDecimal calculateTotal(List<OrderItemRequest> items) {
-        return items.stream()
-                .map(item -> item.unitPrice() // 'P' maiúsculo aqui também!
-                        .multiply(BigDecimal.valueOf(item.quantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
+        // =============== O SEGUNDO SCRIPT ENTRA EXATAMENTE AQUI ===============
+        // 3. MENSAGERIA: Envia os dados do pedido criado para o tópico do Apache Kafka
+        kafkaTemplate.send("order-events-topic", response.id().toString(), response);
+        // ======================================================================
 
-    private OrderResponse toResponse(Order order, List<OrderItem> items) {
-        List<OrderItemResponse> itemResponses = items.stream()
-                .map(item -> new OrderItemResponse(
-                        item.getProductId(),
-                        item.getQuantity(),
-                        item.getUnitPrice()))
-                .toList();
-
-        // Agora enviando os 6 parâmetros corretos exigidos pelo OrderResponse
-        return new OrderResponse(
-                order.getId(),
-                order.getClientId(),
-                order.getStatus(),
-                order.getTotalAmount(),
-                itemResponses, // Lista de itens convertida para Response
-                order.getCreatedAt() // Enviando o createdAt que estava faltando!
-        );
+        // 4. Retorna a resposta final para o Controller (e para o Insomnia)
+        return response;
     }
 }
