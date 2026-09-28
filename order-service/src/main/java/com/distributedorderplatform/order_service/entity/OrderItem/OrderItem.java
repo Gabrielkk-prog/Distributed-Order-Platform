@@ -1,32 +1,27 @@
 package com.distributedorderplatform.order_service.entity.OrderItem;
 
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.UUID;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "order_items")
 public class OrderItem {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     private UUID orderId;
-    private UUID productId; // Atributo interno
-    private Integer quantity; // Atributo interno
-    private BigDecimal unitPrice; // Atributo interno
+    private String productId;
+    private Integer quantity;
+    private BigDecimal unitPrice;
 
-    // --- GETTERS E SETTERS ---
-    public UUID getId() {
+    // Getters e Setters
+    public Long getId() {
         return id;
     }
 
-    public void setId(UUID id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
@@ -38,11 +33,11 @@ public class OrderItem {
         this.orderId = orderId;
     }
 
-    public UUID getProductId() {
+    public String getProductId() {
         return productId;
     }
 
-    public void setProductId(UUID productId) {
+    public void setProductId(String productId) {
         this.productId = productId;
     }
 

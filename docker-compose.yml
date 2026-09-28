@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: ***REMOVED***
       POSTGRES_DB: order_db
     ports:
-      - "5442:5432" # Porta externa exclusiva 5442
+      - "5442:5432" # Windows acessa via 5442, contêiner interno usa 5432
     volumes:
       - ./v_order_db:/var/lib/postgresql/data # Pasta física exclusiva
 

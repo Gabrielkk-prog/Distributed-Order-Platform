@@ -1,4 +1,4 @@
-package com.distributedorderplatform.order_service.controller;
+package com.distributedorderplatform.order_service.controller; // 1. Adicionado o pacote correto
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -7,9 +7,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+// 2. Corrigido o import para apontar para a pasta service correta
+import com.distributedorderplatform.order_service.service.OrderService;
 import com.distributedorderplatform.order_service.dto.OrderRequest;
 import com.distributedorderplatform.order_service.dto.OrderResponse;
-import com.distributedorderplatform.order_service.service.OrderService;
 
 import jakarta.validation.Valid;
 

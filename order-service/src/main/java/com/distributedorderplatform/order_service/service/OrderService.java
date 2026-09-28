@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.distributedorderplatform.order_service.dto.OrderItemRequest;
@@ -17,19 +18,14 @@ import com.distributedorderplatform.order_service.repository.OrderItemRepository
 import com.distributedorderplatform.order_service.repository.OrderRepository;
 
 import jakarta.transaction.Transactional;
-// ... seus outros imports ...
-import org.springframework.kafka.core.KafkaTemplate;
 
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-    // 1. Adicione o template do Kafka (Chave String, Valor pode ser o seu DTO de
-    // Resposta)
     private final KafkaTemplate<String, OrderResponse> kafkaTemplate;
 
-    // 2. Atualize o construtor para receber a nova dependência
     public OrderService(OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
             KafkaTemplate<String, OrderResponse> kafkaTemplate) {
@@ -69,12 +65,39 @@ public class OrderService {
         // 2. Transforma os dados gravados no objeto de resposta (OrderResponse)
         OrderResponse response = toResponse(savedOrder, orderItems);
 
-        // =============== O SEGUNDO SCRIPT ENTRA EXATAMENTE AQUI ===============
         // 3. MENSAGERIA: Envia os dados do pedido criado para o tópico do Apache Kafka
-        kafkaTemplate.send("order-events-topic", response.id().toString(), response);
-        // ======================================================================
+        // Nota: Altere "order-events-topic" para "order.created" se quiser que bata
+        // exatamente com o listener que configuramos no seu notification-service!
+        kafkaTemplate.send("order.created", response.id().toString(), response);
 
         // 4. Retorna a resposta final para o Controller (e para o Insomnia)
         return response;
+    }
+
+    // Calcula matematicamente o valor total com base na quantidade e preço unitário
+    private BigDecimal calculateTotal(List<OrderItemRequest> items) {
+        if (items == null || items.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return items.stream()
+                .map(item -> item.unitPrice().multiply(BigDecimal.valueOf(item.quantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    // Converte a entidade salva no banco de dados para o DTO de resposta limpo
+    private OrderResponse toResponse(Order order, List<OrderItem> orderItems) {
+        List<OrderItemResponse> itemResponses = orderItems.stream()
+                .map(item -> new OrderItemResponse(
+                        item.getProductId(),
+                        item.getQuantity(),
+                        item.getUnitPrice()))
+                .toList();
+
+        return new OrderResponse(
+                order.getId(),
+                order.getClientId(),
+                order.getStatus().toString(), // Convertido para String para bater com o Record
+                order.getTotalAmount(),
+                itemResponses);
     }
 }

@@ -1,57 +1,21 @@
 package com.distributedorderplatform.order_service.entity;
 
+import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "orders")
 public class Order {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "client_id", nullable = false)
-    private UUID clientId;
-
+    private String clientId;
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private OrderStatus status;
-
-    @Column(name = "total_amount", nullable = false)
     private BigDecimal totalAmount;
 
-    @Column(nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @Column(nullable = false)
-    private Instant updatedAt;
-
-    @PrePersist
-    void onCreate() {
-        this.createdAt = Instant.now();
-        this.updatedAt = this.createdAt;
-    }
-
-    @PreUpdate
-    void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
-
-    // --- GETTERS E SETTERS ---
-
+    // Getters e Setters
     public UUID getId() {
         return id;
     }
@@ -60,11 +24,11 @@ public class Order {
         this.id = id;
     }
 
-    public UUID getClientId() {
+    public String getClientId() {
         return clientId;
     }
 
-    public void setClientId(UUID clientId) {
+    public void setClientId(String clientId) {
         this.clientId = clientId;
     }
 
@@ -82,13 +46,5 @@ public class Order {
 
     public void setTotalAmount(BigDecimal totalAmount) {
         this.totalAmount = totalAmount;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
     }
 }
