@@ -1,103 +1,64 @@
 package com.distributedorderplatform.order_service.service;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Service;
-
-import com.distributedorderplatform.order_service.dto.OrderItemRequest;
-import com.distributedorderplatform.order_service.dto.OrderItemResponse;
 import com.distributedorderplatform.order_service.dto.OrderRequest;
 import com.distributedorderplatform.order_service.dto.OrderResponse;
 import com.distributedorderplatform.order_service.entity.Order;
 import com.distributedorderplatform.order_service.entity.OrderStatus;
-import com.distributedorderplatform.order_service.entity.OrderItem.OrderItem;
-import com.distributedorderplatform.order_service.repository.OrderItemRepository;
 import com.distributedorderplatform.order_service.repository.OrderRepository;
+import com.distributedorderplatform.order_service.event.OrderCreatedEvent;
 
-import jakarta.transaction.Transactional;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.UUID;
 
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final OrderItemRepository orderItemRepository;
-    private final KafkaTemplate<String, OrderResponse> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public OrderService(OrderRepository orderRepository,
-            OrderItemRepository orderItemRepository,
-            KafkaTemplate<String, OrderResponse> kafkaTemplate) {
+    public OrderService(OrderRepository orderRepository, KafkaTemplate<String, Object> kafkaTemplate) {
         this.orderRepository = orderRepository;
-        this.orderItemRepository = orderItemRepository;
         this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
     public OrderResponse create(OrderRequest request) {
-
-        BigDecimal total = calculateTotal(request.items());
-
-        Order order = new Order();
-        order.setClientId(request.clientId());
-        order.setStatus(OrderStatus.CREATED);
-        order.setTotalAmount(total);
-
-        Order savedOrder = orderRepository.save(order);
-
-        List<OrderItem> orderItems = request.items()
-                .stream()
-                .map(item -> {
-                    OrderItem orderItem = new OrderItem();
-                    orderItem.setOrderId(savedOrder.getId());
-                    orderItem.setProductId(item.productId());
-                    orderItem.setQuantity(item.quantity());
-                    orderItem.setUnitPrice(item.unitPrice());
-
-                    return orderItem;
-                })
-                .toList();
-
-        // 1. Grava todos os itens no banco de dados Postgres
-        orderItemRepository.saveAll(orderItems);
-
-        // 2. Transforma os dados gravados no objeto de resposta (OrderResponse)
-        OrderResponse response = toResponse(savedOrder, orderItems);
-
-        // 3. MENSAGERIA: Envia os dados do pedido criado para o tópico do Apache Kafka
-        // Nota: Altere "order-events-topic" para "order.created" se quiser que bata
-        // exatamente com o listener que configuramos no seu notification-service!
-        kafkaTemplate.send("order.created", response.id().toString(), response);
-
-        // 4. Retorna a resposta final para o Controller (e para o Insomnia)
-        return response;
-    }
-
-    // Calcula matematicamente o valor total com base na quantidade e preço unitário
-    private BigDecimal calculateTotal(List<OrderItemRequest> items) {
-        if (items == null || items.isEmpty()) {
-            return BigDecimal.ZERO;
-        }
-        return items.stream()
+        // 1. Calcula o valor total multiplicando a quantidade pelo preço de cada item
+        // do request
+        BigDecimal totalCalculado = request.items().stream()
                 .map(item -> item.unitPrice().multiply(BigDecimal.valueOf(item.quantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
 
-    // Converte a entidade salva no banco de dados para o DTO de resposta limpo
-    private OrderResponse toResponse(Order order, List<OrderItem> orderItems) {
-        List<OrderItemResponse> itemResponses = orderItems.stream()
-                .map(item -> new OrderItemResponse(
-                        item.getProductId(),
-                        item.getQuantity(),
-                        item.getUnitPrice()))
-                .toList();
+        // 2. Instancia a entidade e popula com os dados validados
+        Order order = new Order();
+        order.setClientId(request.clientId());
+        order.setStatus(OrderStatus.PENDING);
+        order.setTotalAmount(totalCalculado);
 
+        // 3. Salva o pedido no banco PostgreSQL
+        Order savedOrder = orderRepository.save(order);
+
+        // 4. Monta o Evento de Pedido Criado sem o campo createdAt
+        OrderCreatedEvent event = new OrderCreatedEvent(
+                UUID.randomUUID(),
+                savedOrder.getId(),
+                savedOrder.getClientId(),
+                savedOrder.getTotalAmount(),
+                request.items());
+
+        // 5. Publica a mensagem no tópico do Apache Kafka
+        kafkaTemplate.send("order.created", event);
+
+        // 6. Retorna o DTO de resposta esperado pelo Controller
         return new OrderResponse(
-                order.getId(),
-                order.getClientId(),
-                order.getStatus().toString(), // Convertido para String para bater com o Record
-                order.getTotalAmount(),
-                itemResponses);
+                savedOrder.getId(),
+                savedOrder.getClientId(),
+                savedOrder.getStatus().name(),
+                savedOrder.getTotalAmount(),
+                null);
     }
 }
