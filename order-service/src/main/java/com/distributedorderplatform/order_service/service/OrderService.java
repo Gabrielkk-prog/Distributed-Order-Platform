@@ -4,24 +4,35 @@ import com.distributedorderplatform.order_service.dto.OrderRequest;
 import com.distributedorderplatform.order_service.dto.OrderResponse;
 import com.distributedorderplatform.order_service.entity.Order;
 import com.distributedorderplatform.order_service.entity.OrderStatus;
+import com.distributedorderplatform.order_service.entity.OutboxEvent;
+import com.distributedorderplatform.order_service.entity.OutboxStatus;
 import com.distributedorderplatform.order_service.repository.OrderRepository;
+import com.distributedorderplatform.order_service.repository.OutboxEventRepository;
+
 import com.distributedorderplatform.order_service.event.OrderCreatedEvent;
-import org.springframework.kafka.core.KafkaTemplate;
+import com.distributedorderplatform.order_service.infrastruture.config.EventSerializer;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
-import java.util.List; // 👈 Garanta que possui o import de List
+import java.util.List;
 
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxEventRepository outboxEventRepository; // 👈 Injetado novo repositório
+    private final EventSerializer eventSerializer; // 👈 Injetado novo serializador
 
-    public OrderService(OrderRepository orderRepository, KafkaTemplate<String, Object> kafkaTemplate) {
+    // Construtor atualizado com as dependências do padrão Outbox
+    public OrderService(OrderRepository orderRepository,
+            OutboxEventRepository outboxEventRepository,
+            EventSerializer eventSerializer) {
         this.orderRepository = orderRepository;
-        this.kafkaTemplate = kafkaTemplate;
+        this.outboxEventRepository = outboxEventRepository;
+        this.eventSerializer = eventSerializer;
     }
 
     @Transactional
@@ -48,17 +59,26 @@ public class OrderService {
                 savedOrder.getTotalAmount(),
                 request.items());
 
-        // 5. Publica a mensagem no tópico do Apache Kafka
-        kafkaTemplate.send("order.created", event);
+        // 5. 🔄 PADRÃO OUTBOX: Serializa o evento e grava na tabela do banco
+        String payload = eventSerializer.serialize(event);
 
-        // 6. 🚀 CORREÇÃO AQUI: Retorna o DTO passando uma lista vazia em vez de 'null'
+        OutboxEvent outboxEvent = new OutboxEvent(
+                event.eventId(),
+                savedOrder.getId(),
+                "OrderCreated",
+                payload,
+                OutboxStatus.PENDING,
+                Instant.now());
+
+        outboxEventRepository.save(outboxEvent); // Grava na mesma transação do banco!
+
+        // 6. Retorna o DTO passando uma lista vazia em vez de 'null'
         return new OrderResponse(
                 savedOrder.getId(),
                 savedOrder.getClientId(),
                 savedOrder.getStatus().name(),
                 savedOrder.getTotalAmount(),
-                List.of() // 👈 MUDADO DE 'null' PARA 'List.of()' para o Jackson conseguir ler!
-        );
+                List.of());
     }
 
     @Transactional
@@ -75,9 +95,7 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Pedido não encontrado"));
 
-        // 🚀 O ACERTO ESTÁ AQUI: Deve mudar para CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
     }
-
 }
