@@ -6,13 +6,12 @@ import com.distributedorderplatform.order_service.entity.Order;
 import com.distributedorderplatform.order_service.entity.OrderStatus;
 import com.distributedorderplatform.order_service.repository.OrderRepository;
 import com.distributedorderplatform.order_service.event.OrderCreatedEvent;
-
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List; // 👈 Garanta que possui o import de List
 
 @Service
 public class OrderService {
@@ -28,7 +27,6 @@ public class OrderService {
     @Transactional
     public OrderResponse create(OrderRequest request) {
         // 1. Calcula o valor total multiplicando a quantidade pelo preço de cada item
-        // do request
         BigDecimal totalCalculado = request.items().stream()
                 .map(item -> item.unitPrice().multiply(BigDecimal.valueOf(item.quantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -42,7 +40,7 @@ public class OrderService {
         // 3. Salva o pedido no banco PostgreSQL
         Order savedOrder = orderRepository.save(order);
 
-        // 4. Monta o Evento de Pedido Criado sem o campo createdAt
+        // 4. Monta o Evento de Pedido Criado
         OrderCreatedEvent event = new OrderCreatedEvent(
                 UUID.randomUUID(),
                 savedOrder.getId(),
@@ -53,12 +51,33 @@ public class OrderService {
         // 5. Publica a mensagem no tópico do Apache Kafka
         kafkaTemplate.send("order.created", event);
 
-        // 6. Retorna o DTO de resposta esperado pelo Controller
+        // 6. 🚀 CORREÇÃO AQUI: Retorna o DTO passando uma lista vazia em vez de 'null'
         return new OrderResponse(
                 savedOrder.getId(),
                 savedOrder.getClientId(),
                 savedOrder.getStatus().name(),
                 savedOrder.getTotalAmount(),
-                null);
+                List.of() // 👈 MUDADO DE 'null' PARA 'List.of()' para o Jackson conseguir ler!
+        );
     }
+
+    @Transactional
+    public void confirmOrder(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Pedido não encontrado"));
+
+        order.setStatus(OrderStatus.APPROVED);
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void cancelOrder(UUID orderId, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Pedido não encontrado"));
+
+        // 🚀 O ACERTO ESTÁ AQUI: Deve mudar para CANCELLED
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+    }
+
 }
