@@ -12,3 +12,13 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
         spring.json.value.default.type: "com.plataforma.notification.dto.OrderCreatedEvent"
+
+# 🟢 Configuração do Actuator adicionada aqui:
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always # Mostra detalhes completos de cada componente externo conectado

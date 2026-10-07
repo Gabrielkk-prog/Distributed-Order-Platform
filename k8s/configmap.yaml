@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: meu-sistema-distribuido
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/stock_db"
+  DB_USERNAME: "postgres"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"

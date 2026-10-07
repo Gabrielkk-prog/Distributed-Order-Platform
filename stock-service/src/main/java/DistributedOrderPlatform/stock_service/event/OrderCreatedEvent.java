@@ -7,8 +7,9 @@ import java.util.UUID;
 
 public record OrderCreatedEvent(
         UUID eventId,
+        UUID correlationId,
         UUID orderId,
-        String clientId, // Alterado de UUID para String para bater com o envio
+        UUID clientId,
         BigDecimal totalAmount,
         Instant createdAt,
         List<OrderItemEvent> items) {

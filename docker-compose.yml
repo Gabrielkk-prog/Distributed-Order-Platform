@@ -1,73 +1,66 @@
-version: '3.8'
-
 services:
-  # --- BANCO DO CLIENT-SERVICE ---
-  db-client:
-    image: postgres:16
-    container_name: pg-client
-    environment:
-      POSTGRES_USER: 
-      POSTGRES_PASSWORD: ***REMOVED***
-      POSTGRES_DB: client_db
+  # --- SERVIÇO DE ESTOQUE ---
+  stock-service:
+    build:
+      context: ./stock-service     
+      dockerfile: Dockerfile       
+    container_name: stock-service
     ports:
-      - "5439:5432" # Acessível na sua máquina via localhost:5432
-    volumes:
-      - ./v_client_db:/var/lib/postgresql/data # <- ADICIONE ESTA LINHA EXATAMENTE AQUI
-
-  # --- BANCO DO ORDER-SERVICE ---
-  db-order:
-    image: postgres:16
-    container_name: pg-order
+      - "8088:8088"                
+    # ADICIONE ESTE BLOCO ENVIRONMENT:
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ***REMOVED***
-      POSTGRES_DB: order_db
+      - DB_URL=jdbc:postgresql://postgres:5432/stock_db
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=***REMOVED***
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - distributed-network        
+    depends_on:
+      - postgres                   
+      - kafka                      
+
+  # --- SERVIÇO DE ORDENS ---
+  order-service:
+    build:
+      context: ./order-service    
+      dockerfile: Dockerfile
+    container_name: order-service
     ports:
-      - "5442:5432" # Windows acessa via 5442, contêiner interno usa 5432
-    volumes:
-      - ./v_order_db:/var/lib/postgresql/data # Pasta física exclusiva
-
-  # --- BANCO DO STOCK-SERVICE ---
-  db-stock:
-    image: postgres:16
-    container_name: pg-stock
+      - "8080:8080"
+    # ADICIONE ESTE BLOCO ENVIRONMENT (Ajuste a URL se ele usar outro banco no futuro):
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ***REMOVED***
+      - DB_URL=jdbc:postgresql://postgres:5432/stock_db
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=***REMOVED***
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - distributed-network
+    depends_on:
+      - kafka
+
+  # --- BANCO DE DADOS (POSTGRESQL) ---
+  postgres:
+    image: postgres:16
+    container_name: stock_db_container
+    ports:
+      - "5432:5432"
+    environment:
       POSTGRES_DB: stock_db
-    ports:
-      - "5443:5432" # Porta externa exclusiva 5443
-    volumes:
-      - ./v_stock_db:/var/lib/postgresql/data # Pasta física exclusiva
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ***REMOVED***
+    networks:
+      - distributed-network
 
+  # --- MENSAGERIA (KAFKA) ---
   kafka:
-    image: apache/kafka:4.1.1
-    container_name: distributed-kafka
+    image: apache/kafka:latest     
+    container_name: kafka_container
     ports:
       - "9092:9092"
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
+    networks:
+      - distributed-network
 
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >
-        CONTROLLER:PLAINTEXT,
-        PLAINTEXT:PLAINTEXT
-
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-
-volumes:
-  postgres_data:
+# --- CRIAÇÃO DA REDE PRINCIPAL QUE ABRAÇA O PROJETO ---
+networks:
+  distributed-network:
+    driver: bridge

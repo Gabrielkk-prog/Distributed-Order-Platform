@@ -1,9 +1,9 @@
-package DistributedOrderPlatform.stock_service.service; // Corrigido para o seu pacote real
+package DistributedOrderPlatform.stock_service.service;
 
-import DistributedOrderPlatform.stock_service.event.OrderCreatedEvent; // Import real
-import DistributedOrderPlatform.stock_service.event.OrderItemEvent; // Import real
-import DistributedOrderPlatform.stock_service.entity.Product; // Import real
-import DistributedOrderPlatform.stock_service.repository.StockRepository; // Import real
+import DistributedOrderPlatform.stock_service.event.OrderCreatedEvent;
+import DistributedOrderPlatform.stock_service.event.OrderItemEvent;
+import DistributedOrderPlatform.stock_service.entity.Product;
+import DistributedOrderPlatform.stock_service.repository.StockRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,20 +19,19 @@ public class StockService {
     @Transactional
     public void processOrder(OrderCreatedEvent event) {
         for (OrderItemEvent item : event.items()) {
-            // Busca o produto pelo Id (UUID) correto
             Product product = stockRepository.findById(item.productId())
                     .orElseThrow(() -> new IllegalStateException(
                             "Estoque não encontrado para produto: " + item.productId()));
 
-            // Seus records usam apenas 'quantity' (não existe getreservedquantity)
-            int available = product.getQuantity() - item.quantity();
-
-            if (available < 0) {
+            int quantidadeReservada = product.getReservedQuantity() != null ? product.getReservedQuantity() : 0;
+            int quantidadeDisponivel = product.getQuantity() - quantidadeReservada;
+            if (quantidadeDisponivel < item.quantity()) {
                 throw new IllegalStateException(
                         "Estoque Insuficiente para produto: " + item.productId());
             }
 
-            product.setQuantity(available);
+            product.setReservedQuantity(quantidadeReservada + item.quantity());
+
             stockRepository.save(product);
         }
     }
