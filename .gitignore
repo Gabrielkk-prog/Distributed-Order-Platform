@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+/v_client_db/
+/v_order_db/
+/v_stock_db/
