@@ -1,66 +1,80 @@
+version: '3.8'
+
 services:
   # --- SERVIÇO DE ESTOQUE ---
   stock-service:
     build:
-      context: ./stock-service     
-      dockerfile: Dockerfile       
+      context: ./stock-service
+      dockerfile: Dockerfile
     container_name: stock-service
     ports:
-      - "8088:8088"                
-    # ADICIONE ESTE BLOCO ENVIRONMENT:
+      - "8088:8088"
     environment:
       - DB_URL=jdbc:postgresql://postgres:5432/stock_db
       - DB_USERNAME=postgres
-      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in the environment}
+      - DB_PASSWORD=${DB_PASSWORD}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     networks:
-      - distributed-network        
+      - distributed-network
+    restart: unless-stopped
     depends_on:
-      - postgres                   
-      - kafka                      
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
 
   # --- SERVIÇO DE ORDENS ---
   order-service:
     build:
-      context: ./order-service    
+      context: ./order-service
       dockerfile: Dockerfile
     container_name: order-service
     ports:
       - "8080:8080"
-    # ADICIONE ESTE BLOCO ENVIRONMENT (Ajuste a URL se ele usar outro banco no futuro):
     environment:
       - DB_URL=jdbc:postgresql://postgres:5432/stock_db
       - DB_USERNAME=postgres
-      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in the environment}
+      - DB_PASSWORD=${DB_PASSWORD}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     networks:
       - distributed-network
+    restart: unless-stopped
     depends_on:
-      - kafka
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
 
   # --- BANCO DE DADOS (POSTGRESQL) ---
   postgres:
     image: postgres:16
     container_name: stock_db_container
+    # Remova o bloco 'ports' em produção se não precisar de acesso externo direto
     ports:
       - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: stock_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the environment}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     networks:
       - distributed-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d stock_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # --- MENSAGERIA (KAFKA) ---
   kafka:
-    image: apache/kafka:latest     
+    image: apache/kafka:latest
     container_name: kafka_container
     ports:
       - "9092:9092"
     networks:
       - distributed-network
+    restart: unless-stopped
 
-# --- CRIAÇÃO DA REDE PRINCIPAL QUE ABRAÇA O PROJETO ---
-networks:
+  networks:
   distributed-network:
-    driver: bridge
+  driver: bridge
